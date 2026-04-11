@@ -500,21 +500,6 @@ AddEventHandler('esx_modoadmin:setWeather', function(weather)
 end)
 
 -- ============================================
--- EVENTO: MUDAR HORA
--- ============================================
-
-RegisterServerEvent('esx_modoadmin:setTime')
-AddEventHandler('esx_modoadmin:setTime', function(hour, minute)
-    local xPlayer = ESX.GetPlayerFromId(source)
-    if not xPlayer or not HasAdminPerms(source) then return end
-    
-    local adminName = GetPlayerName(source)
-    SendDiscordBanLog("TIME CHANGE", adminName, "N/A", string.format("Hora alterada para %02d:%02d", hour, minute), nil, nil)
-    LogAdminAction(adminName, "MUDOU HORA", "N/A", string.format("Nova hora: %02d:%02d", hour, minute))
-    -- SINCRONIZAR PARA TODOS
-    TriggerClientEvent('updateTime', -1, hour, minute)
-end)
--- ============================================
 -- LIMPEZA AO DESCONECTAR
 -- ============================================
 
@@ -575,35 +560,21 @@ ESX.RegisterServerCallback('esx_admin:getPlayerInventory', function(source, cb, 
         job = xTarget.job.label,
         grade = xTarget.job.grade_label,
         items = {},
-        weapons = {},
         money = xTarget.getMoney(),
         bank = xTarget.getAccount('bank').money,
         black_money = xTarget.getAccount('black_money').money
     }
     
-    -- ITEMS (ox_inventory)
-    local playerInventory = exports.ox_inventory:GetInventoryItems(targetId)
-    if playerInventory then
-        for slot, item in pairs(playerInventory) do
-            if item and item.count and item.count > 0 then
+    local item_count = xTarget.getInventory()
+    if item_count then
+        for i, item in ipairs(item_count) do
+            if item.count > 0 then
                 table.insert(inventory.items, {
                     name = item.name,
                     label = item.label,
                     count = item.count
                 })
             end
-        end
-    end
-    
-    -- ARMAS
-    local weapons = xTarget.getLoadout()
-    if weapons then
-        for i, weapon in ipairs(weapons) do
-            table.insert(inventory.weapons, {
-                name = weapon.name,
-                label = weapon.label or weapon.name,
-                ammo = weapon.ammo or 0
-            })
         end
     end
     
@@ -983,26 +954,27 @@ RegisterServerEvent('esx_modoadmin:setTime')
 AddEventHandler('esx_modoadmin:setTime', function(hour, minute)
     local xPlayer = ESX.GetPlayerFromId(source)
     if not xPlayer or not HasAdminPerms(source) then return end
-    
+
     if hour < 24 then
         ShiftToHour(hour)
     else
         ShiftToHour(0)
     end
-    
+
     if minute < 60 then
         ShiftToMinute(minute)
     else
         ShiftToMinute(0)
     end
-    
+
+    -- 👇 ISTO É O MAIS IMPORTANTE
+    TriggerEvent('vSync:requestSync')
+
     local adminName = GetPlayerName(source)
-    
+
     SendDiscordBanLog("TIME CHANGE", adminName, "N/A", string.format("Hora alterada para %02d:%02d", hour, minute), nil, nil)
     LogAdminAction(adminName, "MUDOU HORA", "N/A", string.format("Nova hora: %02d:%02d", hour, minute))
-    
-    SyncTimeWeather()
-    
+
     TriggerClientEvent('ox_lib:notify', source, {
         title = 'Hora',
         description = string.format('Hora alterada para %02d:%02d', hour, minute),
