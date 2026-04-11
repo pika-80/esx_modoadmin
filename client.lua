@@ -1215,34 +1215,56 @@ function ViewPlayerInventory(playerId, playerName)
         table.insert(options, {
             title = "💵 Dinheiro Mão",
             description = "€" .. ESX.Math.GroupDigits(inventory.money),
-            icon = 'fa-solid fa-wallet'
+            icon = 'fa-solid fa-wallet',
+            disabled = true
         })
         
         table.insert(options, {
             title = "🏦 Saldo Banco",
             description = "€" .. ESX.Math.GroupDigits(inventory.bank),
-            icon = 'fa-solid fa-university'
+            icon = 'fa-solid fa-university',
+            disabled = true
         })
         
         table.insert(options, {
             title = "💰 Dinheiro Sujo",
             description = "€" .. ESX.Math.GroupDigits(inventory.black_money),
-            icon = 'fa-solid fa-money-bill'
+            icon = 'fa-solid fa-money-bill',
+            disabled = true
         })
         
+        -- ITEMS
         if inventory.items and #inventory.items > 0 then
             for i, item in ipairs(inventory.items) do
+                if item.count > 0 then
+                    table.insert(options, {
+                        title = "  • " .. item.label,
+                        description = "Quantidade: " .. item.count .. "x",
+                        icon = 'fa-solid fa-cube',
+                        disabled = true
+                    })
+                end
+            end
+        end
+        
+        -- ARMAS
+        if inventory.weapons and #inventory.weapons > 0 then
+            for i, weapon in ipairs(inventory.weapons) do
                 table.insert(options, {
-                    title = "  • " .. item.label,
-                    description = "Quantidade: " .. item.count .. "x",
-                    icon = 'fa-solid fa-cube'
+                    title = "  🔫 " .. (weapon.label or weapon.name),
+                    description = "Munição: " .. (weapon.ammo or 0) .. "x",
+                    icon = 'fa-solid fa-gun',
+                    disabled = true
                 })
             end
-        else
+        end
+        
+        if (not inventory.items or #inventory.items == 0) and (not inventory.weapons or #inventory.weapons == 0) then
             table.insert(options, {
                 title = "📦 Sem Items",
                 description = "O player não tem nenhum item",
-                icon = 'fa-solid fa-ban'
+                icon = 'fa-solid fa-ban',
+                disabled = true
             })
         end
         
