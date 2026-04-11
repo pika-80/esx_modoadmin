@@ -575,21 +575,35 @@ ESX.RegisterServerCallback('esx_admin:getPlayerInventory', function(source, cb, 
         job = xTarget.job.label,
         grade = xTarget.job.grade_label,
         items = {},
+        weapons = {},
         money = xTarget.getMoney(),
         bank = xTarget.getAccount('bank').money,
         black_money = xTarget.getAccount('black_money').money
     }
     
-    local item_count = xTarget.getInventory()
-    if item_count then
-        for i, item in ipairs(item_count) do
-            if item.count > 0 then
+    -- ITEMS (ox_inventory)
+    local playerInventory = exports.ox_inventory:GetInventoryItems(targetId)
+    if playerInventory then
+        for slot, item in pairs(playerInventory) do
+            if item and item.count and item.count > 0 then
                 table.insert(inventory.items, {
                     name = item.name,
                     label = item.label,
                     count = item.count
                 })
             end
+        end
+    end
+    
+    -- ARMAS
+    local weapons = xTarget.getLoadout()
+    if weapons then
+        for i, weapon in ipairs(weapons) do
+            table.insert(inventory.weapons, {
+                name = weapon.name,
+                label = weapon.label or weapon.name,
+                ammo = weapon.ammo or 0
+            })
         end
     end
     
