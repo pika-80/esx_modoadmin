@@ -226,10 +226,11 @@ local function SpawnVehicle(modelName)
     local coords  = GetEntityCoords(ped)
     local heading = GetEntityHeading(ped)
 
-    -- Remove the vehicle the player is currently sitting in
+    -- Remove the vehicle the player is currently sitting in.
+    -- Use DeleteEntity so networked/owned vehicles are properly cleaned up for all clients.
     if IsPedInAnyVehicle(ped, false) then
         local old = GetVehiclePedIsIn(ped, false)
-        DeleteVehicle(old)
+        DeleteEntity(old)
     end
 
     local vehicle = CreateVehicle(hash, coords.x, coords.y, coords.z, heading, true, false)
@@ -526,8 +527,9 @@ OpenWeatherMenu = function()
                     { type = 'number', label = 'Minute (0–59)', min = 0, max = 59 },
                 })
                 if input and input[1] ~= nil and input[2] ~= nil then
-                    local h = math.floor(tonumber(input[1]) or 12)
-                    local m = math.floor(tonumber(input[2]) or 0)
+                    -- Use explicit nil check before tonumber so that a valid 0 input is preserved
+                    local h = math.floor(tonumber(input[1]) ~= nil and tonumber(input[1]) or 12)
+                    local m = math.floor(tonumber(input[2]) ~= nil and tonumber(input[2]) or 0)
                     TriggerServerEvent('esx_modoadmin:setTime', h, m)
                     lib.notify({
                         title       = 'Time',

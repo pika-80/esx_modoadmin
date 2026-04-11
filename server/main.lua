@@ -288,8 +288,8 @@ RegisterNetEvent('esx_modoadmin:getInventory', function(targetId)
     local targetName  = GetPlayerName(targetId)
     local targetIdent = targetPlayer.getIdentifier()
 
-    -- Fetch inventory from ox_inventory
-    local inventory = exports.ox_inventory:GetInventory(targetIdent, false)
+    -- Fetch inventory from ox_inventory (pass source ID, not identifier string)
+    local inventory = exports.ox_inventory:GetInventory(targetId, false)
 
     local items = {}
     if inventory and inventory.items then
