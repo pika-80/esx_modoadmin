@@ -527,9 +527,11 @@ OpenWeatherMenu = function()
                     { type = 'number', label = 'Minute (0–59)', min = 0, max = 59 },
                 })
                 if input and input[1] ~= nil and input[2] ~= nil then
-                    -- Use explicit nil check before tonumber so that a valid 0 input is preserved
-                    local h = math.floor(tonumber(input[1]) ~= nil and tonumber(input[1]) or 12)
-                    local m = math.floor(tonumber(input[2]) ~= nil and tonumber(input[2]) or 0)
+                    -- Store tonumber results to avoid redundant calls and preserve valid 0 input
+                    local hn = tonumber(input[1])
+                    local mn = tonumber(input[2])
+                    local h = math.floor(hn ~= nil and hn or 12)
+                    local m = math.floor(mn ~= nil and mn or 0)
                     TriggerServerEvent('esx_modoadmin:setTime', h, m)
                     lib.notify({
                         title       = 'Time',

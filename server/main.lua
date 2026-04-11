@@ -343,13 +343,26 @@ RegisterNetEvent('esx_modoadmin:setTime', function(hour, minute)
     local source = source
     if not IsAdmin(source) then return end
 
+    local h = tonumber(hour)
+    local m = tonumber(minute)
+
+    -- Validate that both values are proper integers within range
+    if not h or not m or h < 0 or h > 23 or m < 0 or m > 59 then
+        TriggerClientEvent('ox_lib:notify', source, {
+            title       = 'Admin',
+            description = 'Invalid time values (hour 0-23, minute 0-59).',
+            type        = 'error',
+        })
+        return
+    end
+
     local adminName = GetPlayerName(source)
-    TriggerClientEvent('esx_modoadmin:syncTime', -1, tonumber(hour), tonumber(minute))
+    TriggerClientEvent('esx_modoadmin:syncTime', -1, h, m)
 
     SendDiscordLog(
         Config.DiscordWebhook,
         '🕐 Time Changed',
-        ('**Time:** %02d:%02d\n**Changed by:** %s'):format(hour, minute, adminName),
+        ('**Time:** %02d:%02d\n**Changed by:** %s'):format(h, m, adminName),
         3447003,
         adminName
     )
