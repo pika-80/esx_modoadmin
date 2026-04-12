@@ -13,5 +13,7 @@ Admin menu mode with tags and bans ox_lib
 🚫 Ban system with customizable duration
 
 commands
+enter staff = /modostaff
+leave staff = /sairstaff
 Open report = /report
 see my report = /meuReport (id)
