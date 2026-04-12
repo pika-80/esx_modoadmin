@@ -483,23 +483,6 @@ AddEventHandler('adminson', function(id1, modo)
 end)
 
 -- ============================================
--- EVENTO: MUDAR CLIMA
--- ============================================
-
-RegisterServerEvent('esx_modoadmin:setWeather')
-AddEventHandler('esx_modoadmin:setWeather', function(weather)
-    local xPlayer = ESX.GetPlayerFromId(source)
-    if not xPlayer or not HasAdminPerms(source) then return end
-    
-    local adminName = GetPlayerName(source)
-    SendDiscordBanLog("WEATHER CHANGE", adminName, "N/A", "Clima alterado para: " .. weather, nil, nil)
-    LogAdminAction(adminName, "MUDOU CLIMA", "N/A", "Novo clima: " .. weather)
-    
-    -- SINCRONIZAR PARA TODOS
-    TriggerClientEvent('updateWeather', -1, weather)
-end)
-
--- ============================================
 -- LIMPEZA AO DESCONECTAR
 -- ============================================
 
@@ -560,21 +543,35 @@ ESX.RegisterServerCallback('esx_admin:getPlayerInventory', function(source, cb, 
         job = xTarget.job.label,
         grade = xTarget.job.grade_label,
         items = {},
+        weapons = {},
         money = xTarget.getMoney(),
         bank = xTarget.getAccount('bank').money,
         black_money = xTarget.getAccount('black_money').money
     }
     
-    local item_count = xTarget.getInventory()
-    if item_count then
-        for i, item in ipairs(item_count) do
-            if item.count > 0 then
+    -- ITEMS (ox_inventory - forma correta)
+    local playerItems = exports.ox_inventory:GetInventoryItems(targetId)
+    if playerItems then
+        for slot, item in pairs(playerItems) do
+            if item and item.count and item.count > 0 then
                 table.insert(inventory.items, {
                     name = item.name,
                     label = item.label,
                     count = item.count
                 })
             end
+        end
+    end
+    
+    -- ARMAS
+    local weapons = xTarget.getLoadout()
+    if weapons then
+        for i, weapon in ipairs(weapons) do
+            table.insert(inventory.weapons, {
+                name = weapon.name,
+                label = weapon.label or weapon.name,
+                ammo = weapon.ammo or 0
+            })
         end
     end
     
@@ -860,149 +857,6 @@ AddEventHandler('playerConnecting', function(playerName, setKickReason, deferral
     end)
 end)
 
--- ============================================
--- VARIÁVEIS DO SISTEMA DE CLIMA E HORA (vSync)
--- ============================================
-
-local CurrentWeather = "EXTRASUNNY"
-local baseTime = 0
-local timeOffset = 0
-local freezeTime = false
-local blackout = false
-local DynamicWeather = true
-
-local AvailableWeatherTypes = {
-    'EXTRASUNNY', 
-    'CLEAR', 
-    'NEUTRAL', 
-    'SMOG', 
-    'FOGGY', 
-    'OVERCAST', 
-    'CLOUDS', 
-    'CLEARING', 
-    'RAIN', 
-    'THUNDER', 
-    'SNOW', 
-    'BLIZZARD', 
-    'SNOWLIGHT', 
-    'XMAS', 
-    'HALLOWEEN',
-}
-
--- ============================================
--- FUNÇÕES DE TEMPO E CLIMA
--- ============================================
-
-function ShiftToMinute(minute)
-    timeOffset = timeOffset - ( ( (baseTime+timeOffset) % 60 ) - minute )
-end
-
-function ShiftToHour(hour)
-    timeOffset = timeOffset - ( ( ((baseTime+timeOffset)/60) % 24 ) - hour ) * 60
-end
-
-function SyncTimeWeather()
-    TriggerClientEvent('vSync:updateWeather', -1, CurrentWeather, blackout)
-    TriggerClientEvent('vSync:updateTime', -1, baseTime, timeOffset, freezeTime)
-end
-
--- ============================================
--- EVENTO: MUDAR CLIMA
--- ============================================
-
-RegisterServerEvent('esx_modoadmin:setWeather')
-AddEventHandler('esx_modoadmin:setWeather', function(weather)
-    local xPlayer = ESX.GetPlayerFromId(source)
-    if not xPlayer or not HasAdminPerms(source) then return end
-    
-    local validWeather = false
-    for i, wtype in ipairs(AvailableWeatherTypes) do
-        if wtype == string.upper(weather) then
-            validWeather = true
-        end
-    end
-    
-    if not validWeather then
-        TriggerClientEvent('ox_lib:notify', source, {
-            title = 'Erro',
-            description = 'Clima inválido!',
-            type = 'error'
-        })
-        return
-    end
-    
-    CurrentWeather = string.upper(weather)
-    local adminName = GetPlayerName(source)
-    
-    SendDiscordBanLog("WEATHER CHANGE", adminName, "N/A", "Clima alterado para: " .. CurrentWeather, nil, nil)
-    LogAdminAction(adminName, "MUDOU CLIMA", "N/A", "Novo clima: " .. CurrentWeather)
-    
-    SyncTimeWeather()
-    
-    TriggerClientEvent('ox_lib:notify', source, {
-        title = 'Clima',
-        description = 'Clima alterado para: ' .. CurrentWeather,
-        type = 'success'
-    })
-end)
-
--- ============================================
--- EVENTO: MUDAR HORA
--- ============================================
-
-RegisterServerEvent('esx_modoadmin:setTime')
-AddEventHandler('esx_modoadmin:setTime', function(hour, minute)
-    local xPlayer = ESX.GetPlayerFromId(source)
-    if not xPlayer or not HasAdminPerms(source) then return end
-
-    if hour < 24 then
-        ShiftToHour(hour)
-    else
-        ShiftToHour(0)
-    end
-
-    if minute < 60 then
-        ShiftToMinute(minute)
-    else
-        ShiftToMinute(0)
-    end
-
-    -- 👇 ISTO É O MAIS IMPORTANTE
-    TriggerEvent('vSync:requestSync')
-
-    local adminName = GetPlayerName(source)
-
-    SendDiscordBanLog("TIME CHANGE", adminName, "N/A", string.format("Hora alterada para %02d:%02d", hour, minute), nil, nil)
-    LogAdminAction(adminName, "MUDOU HORA", "N/A", string.format("Nova hora: %02d:%02d", hour, minute))
-
-    TriggerClientEvent('ox_lib:notify', source, {
-        title = 'Hora',
-        description = string.format('Hora alterada para %02d:%02d', hour, minute),
-        type = 'success'
-    })
-end)
-
--- ============================================
--- THREAD: ATUALIZAR HORA E CLIMA
--- ============================================
-
-Citizen.CreateThread(function()
-    while true do
-        Citizen.Wait(0)
-        local newBaseTime = os.time(os.date("!*t"))/2 + 360
-        if freezeTime then
-            timeOffset = timeOffset + baseTime - newBaseTime			
-        end
-        baseTime = newBaseTime
-    end
-end)
-
-Citizen.CreateThread(function()
-    while true do
-        Citizen.Wait(5000)
-        SyncTimeWeather()
-    end
-end)
 
 -- ============================================
 -- EVENTO: SPAWN VEÍCULO
@@ -1025,4 +879,287 @@ AddEventHandler('esx_modoadmin:spawnVehicle', function(model, vehicleName)
     SendDiscordBanLog("SPAWN VEÍCULO", adminName, "N/A", "Veículo: " .. vehicleName .. " (Modelo: " .. model .. ")", nil, nil)
     LogAdminAction(adminName, "SPAWN VEÍCULO", "N/A", "Veículo: " .. vehicleName)
     
+end)
+
+-- ============================================
+-- SISTEMA DE REPORTS
+-- ============================================
+
+local reportsDatabase = {}
+local playerReports = {}
+local reportCooldown = {}
+local reportId = 0
+
+function SendDiscordReport(playerId, playerName, message, status)
+    if not Config.DiscordLogs or Config.DiscordWebhook == "" then
+        return
+    end
+    
+    local color = "16753920" -- Laranja
+    if status == "RESPONDIDO" then
+        color = "65280" -- Verde
+    elseif status == "FECHADO" then
+        color = "9807270" -- Cinzento
+    end
+    
+    local embed = {
+        {
+            ["color"] = tonumber(color),
+            ["title"] = "**NOVO REPORT - ID: #" .. reportId .. "**",
+            ["description"] = string.format(
+                "**Player:** %s (ID: %d)\n**Mensagem:** %s\n**Status:** %s",
+                playerName,
+                playerId,
+                message,
+                status
+            ),
+            ["footer"] = {
+                ["text"] = "SISTEMA DE REPORTS",
+            },
+            ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%SZ")
+        }
+    }
+    
+    PerformHttpRequest(Config.DiscordWebhook, function(err, text, headers) end, 'POST', json.encode({username = "Reports", embeds = embed}), { ['Content-Type'] = 'application/json' })
+end
+
+RegisterServerEvent('reports:sendReport')
+AddEventHandler('reports:sendReport', function(message)
+    local src = source
+    local xPlayer = ESX.GetPlayerFromId(src)
+    
+    if not xPlayer then return end
+    
+    local now = os.time()
+    
+    -- Verificar cooldown
+    if reportCooldown[src] and (now - reportCooldown[src]) < Config.Reports.ReportCooldown then
+        TriggerClientEvent('ox_lib:notify', src, {
+            title = "Report",
+            description = "Aguarde antes de fazer outro report!",
+            type = "error",
+            duration = 3000
+        })
+        return
+    end
+    
+    -- Verificar limite de reports
+    if playerReports[src] and playerReports[src] >= Config.Reports.MaxReportsPerPlayer then
+        TriggerClientEvent('ox_lib:notify', src, {
+            title = "Report",
+            description = "Atingiu o limite de reports!",
+            type = "error",
+            duration = 3000
+        })
+        return
+    end
+    
+    reportId = reportId + 1
+    local playerName = GetPlayerName(src)
+    
+    local report = {
+        id = reportId,
+        playerId = src,
+        playerName = playerName,
+        message = message,
+        status = "PENDENTE",
+        timestamp = now,
+        responses = {}
+    }
+    
+    table.insert(reportsDatabase, report)
+    
+    if not playerReports[src] then
+        playerReports[src] = 0
+    end
+    playerReports[src] = playerReports[src] + 1
+    
+    reportCooldown[src] = now
+    
+    -- Notificar player
+    TriggerClientEvent('ox_lib:notify', src, {
+        title = "Report",
+        description = "Report #" .. reportId .. " enviado com sucesso!",
+        type = "success",
+        duration = 3000
+    })
+    
+    -- Notificar admins
+    local xPlayers = ESX.GetExtendedPlayers()
+    for i, xAdmin in ipairs(xPlayers) do
+        local grupo = xAdmin.getGroup()
+        if grupo == 'admin' or grupo == 'mod' or grupo == 'superadmin' then
+            TriggerClientEvent('ox_lib:notify', xAdmin.source, {
+                title = "📋 Novo Report",
+                description = "ID #" .. reportId .. " - " .. playerName,
+                type = "info",
+                duration = 5000
+            })
+        end
+    end
+    
+    SendDiscordReport(src, playerName, message, "PENDENTE")
+end)
+
+RegisterServerEvent('reports:respondReport')
+AddEventHandler('reports:respondReport', function(reportId, response)
+    local src = source
+    local xPlayer = ESX.GetPlayerFromId(src)
+    
+    if not xPlayer or not HasAdminPerms(src) then
+        TriggerClientEvent('ox_lib:notify', src, {
+            title = "Erro",
+            description = "Sem permissão!",
+            type = "error"
+        })
+        return
+    end
+    
+    local adminName = GetPlayerName(src)
+    
+    for i, report in ipairs(reportsDatabase) do
+        if report.id == reportId then
+            table.insert(report.responses, {
+                admin = adminName,
+                message = response,
+                timestamp = os.time()
+            })
+            
+            report.status = "RESPONDIDO"
+            
+            -- Notificar o player que fez o report
+            if ESX.GetPlayerFromId(report.playerId) then  -- ← MUDAR AQUI
+                TriggerClientEvent('reports:notifyResponse', report.playerId, adminName, response)
+            end
+            
+            TriggerClientEvent('ox_lib:notify', src, {
+                title = "Report",
+                description = "Resposta enviada com sucesso!",
+                type = "success",
+                duration = 2000
+            })
+            
+            SendDiscordReport(report.playerId, report.playerName, report.message, "RESPONDIDO")
+            return
+        end
+    end
+end)
+
+RegisterServerEvent('reports:playerRespond')
+AddEventHandler('reports:playerRespond', function(reportId, response)
+    local src = source
+    local xPlayer = ESX.GetPlayerFromId(src)
+    
+    if not xPlayer then return end
+    
+    local playerName = GetPlayerName(src)
+    
+    for i, report in ipairs(reportsDatabase) do
+        if report.id == reportId and report.playerId == src then
+            table.insert(report.responses, {
+                admin = "[PLAYER] " .. playerName,
+                message = response,
+                timestamp = os.time()
+            })
+            
+            TriggerClientEvent('ox_lib:notify', src, {
+                title = "Report",
+                description = "Resposta enviada com sucesso!",
+                type = "success",
+                duration = 2000
+            })
+            
+            -- Notificar todos os admins online
+            local xPlayers = ESX.GetExtendedPlayers()
+            for j, xAdmin in ipairs(xPlayers) do
+                local grupo = xAdmin.getGroup()
+                if grupo == 'admin' or grupo == 'mod' or grupo == 'superadmin' then
+                    TriggerClientEvent('ox_lib:notify', xAdmin.source, {
+                        title = "📋 Nova Resposta no Report",
+                        description = playerName .. " respondeu ao report #" .. reportId,
+                        type = "info",
+                        duration = 5000
+                    })
+                end
+            end
+            
+            return
+        end
+    end
+    
+    TriggerClientEvent('ox_lib:notify', src, {
+        title = "Erro",
+        description = "Report não encontrado!",
+        type = "error"
+    })
+end)
+
+RegisterServerEvent('reports:closeReport')
+AddEventHandler('reports:closeReport', function(reportId)
+    local src = source
+    local xPlayer = ESX.GetPlayerFromId(src)
+    
+    if not xPlayer or not HasAdminPerms(src) then return end
+    
+    for i, report in ipairs(reportsDatabase) do
+        if report.id == reportId then
+            report.status = "FECHADO"
+            
+            -- REMOVER DA LISTA (opcional, ou apenas mudar status)
+            table.remove(reportsDatabase, i)
+            
+            SendDiscordReport(report.playerId, report.playerName, report.message, "FECHADO")
+            return
+        end
+    end
+end)
+
+-- Callback para obter reports
+ESX.RegisterServerCallback('reports:getReports', function(source, cb)
+    local xPlayer = ESX.GetPlayerFromId(source)
+    
+    if not xPlayer or not HasAdminPerms(source) then
+        cb(nil)
+        return
+    end
+    
+    cb(reportsDatabase)
+end)
+
+-- Callback para obter detalhes do report
+ESX.RegisterServerCallback('reports:getReportDetails', function(source, cb, reportId)
+    local xPlayer = ESX.GetPlayerFromId(source)
+    
+    if not xPlayer or not HasAdminPerms(source) then
+        cb(nil)
+        return
+    end
+    
+    for i, report in ipairs(reportsDatabase) do
+        if report.id == reportId then
+            cb(report)
+            return
+        end
+    end
+    
+    cb(nil)
+end)
+
+-- Callback para o player obter detalhes do seu report
+ESX.RegisterServerCallback('reports:getMyReportDetails', function(source, cb, reportId)
+    local xPlayer = ESX.GetPlayerFromId(source)
+    
+    if not xPlayer then
+        cb(nil)
+        return
+    end
+    
+    for i, report in ipairs(reportsDatabase) do
+        if report.id == reportId and report.playerId == source then
+            cb(report)
+            return
+        end
+    end
+    
+    cb(nil)
 end)
