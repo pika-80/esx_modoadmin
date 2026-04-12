@@ -11,3 +11,7 @@ Admin menu mode with tags and bans ox_lib
 💬 Discord logs for all actions
 👤 ID system with configurable distance
 🚫 Ban system with customizable duration
+
+commands
+Open report = /report
+see my report = /meuReport (id)
