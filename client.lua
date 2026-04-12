@@ -232,26 +232,26 @@ end)
 -- ============================================
 
 function CreateStaffTag()
-    -- Criar thread para manter a tag sempre visível
     Citizen.CreateThread(function()
         while IsAdminMod do
             local ped = PlayerPedId()
+
+            if not DoesEntityExist(ped) then break end
+
             local tagText = "[STAFF]-" .. GetPlayerName(PlayerId())
-            
-            -- Criar a tag apenas se não existir
+
             if not staffTag or not IsMpGamerTagActive(staffTag) then
                 staffTag = CreateFakeMpGamerTag(ped, tagText, false, false, '', 0)
                 SetMpGamerTagName(staffTag, tagText)
                 SetMpGamerTagAlpha(staffTag, 2, 255)
             end
-            
-            -- Manter a tag visível
+
             if staffTag and IsMpGamerTagActive(staffTag) then
                 SetMpGamerTagVisibility(staffTag, 0, true)
                 SetMpGamerTagVisibility(staffTag, 2, true)
             end
-            
-            Wait(100)
+
+            Wait(200)
         end
     end)
 end
@@ -385,7 +385,7 @@ Citizen.CreateThread(function()
         elseif checkm == false then
             HideHudAndRadarThisFrame()
         end
-        Citizen.Wait(0)
+        Citizen.Wait(5)
     end
 end)
 
@@ -413,8 +413,8 @@ end)
 
 Citizen.CreateThread(function()
     while true do
-        Citizen.Wait(100)
-        if group ~= "user" and IsAdminMod == true and godmode == true then
+        Citizen.Wait(500)
+        if group and group ~= "user" and IsAdminMod == true and godmode == true then
             local ped = PlayerPedId()
             
             -- Godmode
@@ -433,7 +433,7 @@ Citizen.CreateThread(function()
             -- Armadura ao máximo
             AddArmourToPed(ped, 100)
             
-        elseif group ~= "user" and IsAdminMod == false and godmode == false then
+        elseif group and group ~= "user" and IsAdminMod == false and godmode == false then
             local ped = PlayerPedId()
             
             SetEntityInvincible(ped, false)
@@ -449,12 +449,15 @@ end)
 -- KEYBIND F10 - MENU ADMIN
 -- ============================================
 
+local lastOpen = 0
+
 Citizen.CreateThread(function()
     while true do
         Wait(0)
-        
+
         if IsControlJustReleased(0, 57) then
-            if IsAdminMod then
+            if IsAdminMod and (GetGameTimer() - lastOpen > 500) then
+                lastOpen = GetGameTimer()
                 OpenAdminMenu()
             end
         end
@@ -489,6 +492,14 @@ function OpenAdminMenu()
             icon = 'fa-solid fa-gavel',
             onSelect = function()
                 OpenBanishmentsMenu()
+            end
+        },
+        {
+            title = "📋 Reports",
+            description = "Ver e responder reports",
+            icon = 'fa-solid fa-clipboard',
+            onSelect = function()
+                ShowReportsMenu()
             end
         },
         {
@@ -785,23 +796,18 @@ end
 
 function TeleportToLocation(coords, locationName)
     local ped = PlayerPedId()
-    
-    -- Encontrar chão
+
     local x, y, z = coords.x, coords.y, coords.z
-    local groundZ = z
-    
-    for i = z, z - 100, -1.0 do
-        if GetGroundZFor_3dCoord(x, y, i, groundZ, false) then
-            break
-        end
+    local foundGround, groundZ = GetGroundZFor_3dCoord(x, y, z, false)
+
+    if foundGround then
+        z = groundZ
     end
-    
-    -- Teleportar
-    SetEntityCoordsNoOffset(ped, x, y, groundZ, false, false, false)
-    
-    -- Disparar evento para log
+
+    SetEntityCoordsNoOffset(ped, x, y, z, false, false, false)
+
     TriggerServerEvent('esx_modoadmin:teleportToLocation', locationName)
-    
+
     exports.ox_lib:notify({
         title = "Teleporte",
         description = "Teleportado para: " .. locationName,
@@ -1215,56 +1221,34 @@ function ViewPlayerInventory(playerId, playerName)
         table.insert(options, {
             title = "💵 Dinheiro Mão",
             description = "€" .. ESX.Math.GroupDigits(inventory.money),
-            icon = 'fa-solid fa-wallet',
-            disabled = true
+            icon = 'fa-solid fa-wallet'
         })
         
         table.insert(options, {
             title = "🏦 Saldo Banco",
             description = "€" .. ESX.Math.GroupDigits(inventory.bank),
-            icon = 'fa-solid fa-university',
-            disabled = true
+            icon = 'fa-solid fa-university'
         })
         
         table.insert(options, {
             title = "💰 Dinheiro Sujo",
             description = "€" .. ESX.Math.GroupDigits(inventory.black_money),
-            icon = 'fa-solid fa-money-bill',
-            disabled = true
+            icon = 'fa-solid fa-money-bill'
         })
         
-        -- ITEMS
         if inventory.items and #inventory.items > 0 then
             for i, item in ipairs(inventory.items) do
-                if item.count > 0 then
-                    table.insert(options, {
-                        title = "  • " .. item.label,
-                        description = "Quantidade: " .. item.count .. "x",
-                        icon = 'fa-solid fa-cube',
-                        disabled = true
-                    })
-                end
-            end
-        end
-        
-        -- ARMAS
-        if inventory.weapons and #inventory.weapons > 0 then
-            for i, weapon in ipairs(inventory.weapons) do
                 table.insert(options, {
-                    title = "  🔫 " .. (weapon.label or weapon.name),
-                    description = "Munição: " .. (weapon.ammo or 0) .. "x",
-                    icon = 'fa-solid fa-gun',
-                    disabled = true
+                    title = "  • " .. item.label,
+                    description = "Quantidade: " .. item.count .. "x",
+                    icon = 'fa-solid fa-cube'
                 })
             end
-        end
-        
-        if (not inventory.items or #inventory.items == 0) and (not inventory.weapons or #inventory.weapons == 0) then
+        else
             table.insert(options, {
                 title = "📦 Sem Items",
                 description = "O player não tem nenhum item",
-                icon = 'fa-solid fa-ban',
-                disabled = true
+                icon = 'fa-solid fa-ban'
             })
         end
         
@@ -1419,21 +1403,30 @@ Citizen.CreateThread(function()
     while true do
         if noclipEnabled and IsAdminMod then
             local ped = PlayerPedId()
-            local x, y, z = table.unpack(GetEntityCoords(ped))
-            
-            SetEntityCoordsNoOffset(ped, x, y, z, false, false, false)
-            SetEntityVisible(ped, true, false)
+            local coords = GetEntityCoords(ped)
+            local forward = GetEntityForwardVector(ped)
+
             SetEntityCollision(ped, false, false)
-            
-            if IsControlPressed(0, 32) then z = z + noclipSpeed end  -- W
-            if IsControlPressed(0, 33) then z = z - noclipSpeed end  -- S
-            if IsControlPressed(0, 34) then x = x - noclipSpeed end  -- A
-            if IsControlPressed(0, 35) then x = x + noclipSpeed end  -- D
-            
-            SetEntityCoordsNoOffset(ped, x, y, z, false, false, false)
+            SetEntityInvincible(ped, true)
+
+            if IsControlPressed(0, 32) then -- W
+                coords = coords + (forward * noclipSpeed)
+            end
+            if IsControlPressed(0, 33) then -- S
+                coords = coords - (forward * noclipSpeed)
+            end
+            if IsControlPressed(0, 34) then -- A
+                coords = coords - (vector3(forward.y, -forward.x, 0.0) * noclipSpeed)
+            end
+            if IsControlPressed(0, 35) then -- D
+                coords = coords + (vector3(forward.y, -forward.x, 0.0) * noclipSpeed)
+            end
+
+            SetEntityCoordsNoOffset(ped, coords.x, coords.y, coords.z, true, true, true)
         else
             local ped = PlayerPedId()
             SetEntityCollision(ped, true, true)
+            SetEntityInvincible(ped, false)
         end
         Wait(0)
     end
@@ -1581,7 +1574,7 @@ function OpenWeatherMenu()
 end
 
 function SetWeather(weather)
-    TriggerServerEvent('esx_modoadmin:setWeather', weather)
+    ExecuteCommand('weather ' .. string.lower(weather))
     
     TriggerEvent('ox_lib:notify', {
         title = "Clima",
@@ -1606,7 +1599,7 @@ function OpenTimeMenu()
     local hour = input[1]
     local minute = input[2]
     
-    TriggerServerEvent('esx_modoadmin:setTime', hour, minute)
+    ExecuteCommand('time ' .. hour .. ' ' .. minute)
     
     TriggerEvent('ox_lib:notify', {
         title = "Hora",
@@ -1631,3 +1624,377 @@ AddEventHandler('vSync:updateTime', function(base, offset, freeze)
     local minute = math.floor((base+offset)%60)
     NetworkOverrideClockTime(hour, minute, 0)
 end)
+
+-- ============================================
+-- SISTEMA DE REPORTS
+-- ============================================
+
+RegisterCommand('report', function(source, args, rawCommand)
+    if not args[1] then
+        TriggerEvent('ox_lib:notify', {
+            title = "Report",
+            description = "Uso: /report <mensagem>",
+            type = "error",
+            duration = 3000
+        })
+        return
+    end
+    
+    local message = table.concat(args, " ")
+    
+    TriggerServerEvent('reports:sendReport', message)
+end, false)
+
+-- ============================================
+-- SISTEMA DE REPORTS (CLIENT)
+-- ============================================
+
+function ShowReportsMenu()
+    ESX.TriggerServerCallback('reports:getReports', function(reports)
+        if not reports or #reports == 0 then
+            exports.ox_lib:notify({
+                title = "Reports",
+                description = "Nenhum report!",
+                type = "info",
+                duration = 3000
+            })
+            return
+        end
+        
+        local options = {}
+        
+        for i, report in ipairs(reports) do
+            local statusIcon = "⏳"
+            local statusColor = "16753920"
+            
+            if report.status == "RESPONDIDO" then
+                statusIcon = "✅"
+                statusColor = "65280"
+            elseif report.status == "FECHADO" then
+                statusIcon = "❌"
+                statusColor = "9807270"
+            end
+            
+            table.insert(options, {
+                title = statusIcon .. " Report #" .. report.id,
+                description = report.playerName .. " - " .. report.message:sub(1, 50) .. "...",
+                icon = 'fa-solid fa-clipboard',
+                onSelect = function()
+                    ViewReportDetails(report.id)
+                end
+            })
+        end
+        
+        table.insert(options, {
+            title = "← Voltar",
+            description = "Voltar ao menu anterior",
+            icon = 'fa-solid fa-arrow-left',
+            onSelect = function()
+                OpenAdminMenu()
+            end
+        })
+        
+        exports.ox_lib:registerContext({
+            id = 'admin_reports_menu',
+            title = "📋 Reports (" .. #reports .. ")",
+            options = options
+        })
+        
+        exports.ox_lib:showContext('admin_reports_menu')
+    end)
+end
+
+function ViewReportDetails(reportId)
+    ESX.TriggerServerCallback('reports:getReportDetails', function(report)
+        if not report then 
+            exports.ox_lib:notify({
+                title = "Erro",
+                description = "Report não encontrado!",
+                type = "error"
+            })
+            return
+        end
+        
+        local options = {}
+        
+        table.insert(options, {
+            title = "👤 Player",
+            description = report.playerName .. " (ID: " .. report.playerId .. ")",
+            icon = 'fa-solid fa-user',
+            disabled = true
+        })
+        
+        table.insert(options, {
+            title = "📝 Mensagem",
+            description = report.message,
+            icon = 'fa-solid fa-message',
+            disabled = true
+        })
+        
+        table.insert(options, {
+            title = "📊 Status",
+            description = report.status or "PENDENTE",
+            icon = 'fa-solid fa-circle-exclamation',
+            disabled = true
+        })
+        
+        -- Mostrar respostas
+        if report.responses and #report.responses > 0 then
+            table.insert(options, {
+                title = "💬 Respostas (" .. #report.responses .. ")",
+                description = "Ver todas as respostas",
+                icon = 'fa-solid fa-comments',
+                onSelect = function()
+                    ViewReportResponses(report)
+                end
+            })
+        end
+        
+        -- Opções de ação
+        if report.status == "PENDENTE" then
+            table.insert(options, {
+                title = "📝 Responder",
+                description = "Responder ao report",
+                icon = 'fa-solid fa-reply',
+                onSelect = function()
+                    RespondToReport(reportId)
+                end
+            })
+        end
+        
+        table.insert(options, {
+            title = "❌ Fechar Report",
+            description = "Marcar como fechado",
+            icon = 'fa-solid fa-xmark',
+            onSelect = function()
+                CloseReport(reportId)
+            end
+        })
+        
+        table.insert(options, {
+            title = "← Voltar",
+            description = "Voltar ao menu anterior",
+            icon = 'fa-solid fa-arrow-left',
+            onSelect = function()
+                ShowReportsMenu()
+            end
+        })
+        
+        exports.ox_lib:registerContext({
+            id = 'admin_report_details_' .. reportId,
+            title = "📋 Report #" .. reportId,
+            options = options
+        })
+        
+        exports.ox_lib:showContext('admin_report_details_' .. reportId)
+    end, reportId)
+end
+
+function ViewReportResponses(report)
+    local options = {}
+    
+    if report.responses and #report.responses > 0 then
+        for i, response in ipairs(report.responses) do
+            table.insert(options, {
+                title = "👤 " .. (response.admin or "Admin"),
+                description = response.message or "Sem mensagem",
+                icon = 'fa-solid fa-user-check',
+                disabled = true
+            })
+        end
+    else
+        table.insert(options, {
+            title = "❌ Sem Respostas",
+            description = "Nenhuma resposta ainda",
+            icon = 'fa-solid fa-ban',
+            disabled = true
+        })
+    end
+    
+    table.insert(options, {
+        title = "← Voltar",
+        description = "Voltar ao menu anterior",
+        icon = 'fa-solid fa-arrow-left',
+        onSelect = function()
+            ViewReportDetails(report.id)
+        end
+    })
+    
+    exports.ox_lib:registerContext({
+        id = 'admin_report_responses_' .. report.id,
+        title = "💬 Respostas Report #" .. report.id,
+        options = options
+    })
+    
+    exports.ox_lib:showContext('admin_report_responses_' .. report.id)
+end
+
+function RespondToReport(reportId)
+    local input = exports.ox_lib:inputDialog('Responder Report #' .. reportId, {
+        {type = 'textarea', label = 'Resposta', placeholder = 'Escreve a tua resposta...', required = true}
+    })
+    
+    if not input or input[1] == '' then
+        exports.ox_lib:notify({
+            title = "Erro",
+            description = "Resposta obrigatória!",
+            type = "error"
+        })
+        return
+    end
+    
+    TriggerServerEvent('reports:respondReport', reportId, input[1])
+    
+    exports.ox_lib:notify({
+        title = "Report",
+        description = "Resposta enviada com sucesso!",
+        type = "success",
+        duration = 2000
+    })
+    
+    ShowReportsMenu()
+end
+
+function CloseReport(reportId)
+    local alert = exports.ox_lib:alertDialog({
+        header = "Fechar Report?",
+        content = "Tem certeza que quer fechar o report #" .. reportId .. "?",
+        centered = true,
+        cancel = true
+    })
+    
+    if alert then
+        TriggerServerEvent('reports:closeReport', reportId)
+        
+        exports.ox_lib:notify({
+            title = "Report",
+            description = "Report fechado!",
+            type = "success",
+            duration = 2000
+        })
+        
+        Wait(500)
+        ShowReportsMenu()
+    end
+end
+
+-- ============================================
+-- NOTIFICAÇÃO DE RESPOSTA AO REPORT (CLIENT)
+-- ============================================
+
+RegisterNetEvent('reports:notifyResponse')
+AddEventHandler('reports:notifyResponse', function(reportId, adminName, message)
+    TriggerEvent('ox_lib:notify', {
+        title = "📋 Report Respondido",
+        description = adminName .. " respondeu ao teu report #" .. reportId,
+        type = "success",
+        duration = 5000
+    })
+end)
+
+-- Comando para ver respostas dos reports
+RegisterCommand('meuReport', function(source, args, rawCommand)
+    local reportId = tonumber(args[1])
+    
+    if not reportId then
+        TriggerEvent('ox_lib:notify', {
+            title = "Erro",
+            description = "Uso: /meuReport <id>",
+            type = "error"
+        })
+        return
+    end
+    
+    ESX.TriggerServerCallback('reports:getMyReportDetails', function(report)
+        if not report then
+            TriggerEvent('ox_lib:notify', {
+                title = "Erro",
+                description = "Report não encontrado!",
+                type = "error"
+            })
+            return
+        end
+        
+        local options = {}
+        
+        table.insert(options, {
+            title = "📝 Teu Report",
+            description = report.message,
+            icon = 'fa-solid fa-message',
+            disabled = true
+        })
+        
+        table.insert(options, {
+            title = "📊 Status",
+            description = report.status,
+            icon = 'fa-solid fa-circle-exclamation',
+            disabled = true
+        })
+        
+        if report.responses and #report.responses > 0 then
+            for i, response in ipairs(report.responses) do
+                table.insert(options, {
+                    title = "💬 Resposta de " .. response.admin,
+                    description = response.message,
+                    icon = 'fa-solid fa-reply',
+                    disabled = true
+                })
+            end
+        else
+            table.insert(options, {
+                title = "⏳ Aguardando Resposta",
+                description = "O staff ainda não respondeu",
+                icon = 'fa-solid fa-hourglass',
+                disabled = true
+            })
+        end
+        
+        -- Opção de responder
+        table.insert(options, {
+            title = "📝 Responder ao Staff",
+            description = "Enviar uma resposta",
+            icon = 'fa-solid fa-pen',
+            onSelect = function()
+                PlayerRespondToReport(reportId)
+            end
+        })
+        
+        table.insert(options, {
+            title = "← Fechar",
+            description = "Fechar este menu",
+            icon = 'fa-solid fa-xmark',
+            onSelect = function()
+                -- Fechar
+            end
+        })
+        
+        exports.ox_lib:registerContext({
+            id = 'player_report_view_' .. reportId,
+            title = "📋 Report #" .. reportId,
+            options = options
+        })
+        
+        exports.ox_lib:showContext('player_report_view_' .. reportId)
+    end, reportId)
+end, false)
+
+-- ============================================
+-- PLAYER RESPONDER AO REPORT
+-- ============================================
+
+function PlayerRespondToReport(reportId)
+    local input = exports.ox_lib:inputDialog('Responder ao Staff - Report #' .. reportId, {
+        {type = 'textarea', label = 'Tua Resposta', placeholder = 'Escreve a tua resposta...', required = true}
+    })
+    
+    if not input or input[1] == '' then
+        TriggerEvent('ox_lib:notify', {
+            title = "Erro",
+            description = "Resposta obrigatória!",
+            type = "error"
+        })
+        return
+    end
+    
+    TriggerServerEvent('reports:playerRespond', reportId, input[1])
+end
