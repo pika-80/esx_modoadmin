@@ -82,6 +82,12 @@ Config.Admins = {
     }
 }
 
+Config.Reports = {
+    MaxReportsPerPlayer = 3, -- Máximo de reports por player por sessão
+    ReportCooldown = 300, -- 5 minutos cooldown entre reports
+    DiscordWebhook = Config.DiscordWebhook, -- Usar o mesmo webhook
+}
+
 Config.Locations = {
     Drogas = {
         {name = "Apanha Cannabis", coords = vector3(2034.58, 4882.59, 42.88)},
