@@ -18,3 +18,6 @@ enter staff = /modostaff
 leave staff = /sairstaff
 Open report = /report
 see my report = /meuReport (id)
+
+Preview:
+https://www.youtube.com/watch?v=LBr5mFJi1cM
