@@ -24,3 +24,4 @@ see my report = /meuReport (id)
 
 Preview:
 https://www.youtube.com/watch?v=LBr5mFJi1cM
+Discord:https://discord.gg/4Xq6AZ3nM4
